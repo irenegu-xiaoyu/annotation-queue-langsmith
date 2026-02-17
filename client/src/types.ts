@@ -50,22 +50,16 @@ export type Feedback = {
   key: string;
   score: number | null;
   comment: string | null;
-  span_path?: (string | number)[];
-  span_start_index?: number;
-  span_end_index?: number;
   created_at: string;
   modified_at: string;
-};
+} & FeedbackSpan;
 
 export type FeedbackCreate = {
   trace_id: string;
   key: string;
   score?: number;
   comment?: string;
-  span_path?: (string | number)[];
-  span_start_index?: number;
-  span_end_index?: number;
-};
+} & FeedbackSpan;
 
 export type FeedbackClearRequest = {
   trace_id: string;

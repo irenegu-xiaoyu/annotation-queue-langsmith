@@ -3,8 +3,8 @@
 import asyncio
 import os
 import subprocess
-from uuid import uuid4
 from collections.abc import AsyncGenerator
+from uuid import uuid4
 
 import asyncpg
 import pytest_asyncio
@@ -115,6 +115,26 @@ async def db_conn() -> AsyncGenerator[asyncpg.Connection, None]:
     pool = await get_test_pool()
     async with pool.acquire() as conn:
         yield conn
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def cleanup_db() -> AsyncGenerator[None, None]:
+    """Clean database tables after each test to keep tests isolated."""
+    yield
+    pool = await get_test_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            TRUNCATE TABLE
+                feedback,
+                queue_entries,
+                queue_rubric_items,
+                queues,
+                traces,
+                tracing_projects
+            RESTART IDENTITY CASCADE
+            """
+        )
 
 
 @pytest_asyncio.fixture

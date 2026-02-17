@@ -98,7 +98,7 @@ export function useQueueRubric(queueId: string | null) {
 export function useQueueNextEntry(queueId: string | null) {
   const { data, error, isLoading, mutate } = useSWR<QueueEntry | null>(
     queueId ? `${API_BASE}/queues/${queueId}/entries/next` : null,
-    async (url) => {
+    async (url: string) => {
       try {
         return await fetcher(url);
       } catch (e: any) {

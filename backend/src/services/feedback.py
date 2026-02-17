@@ -1,7 +1,6 @@
 """Business logic for feedback."""
 
 import json
-
 from uuid import UUID
 
 import asyncpg
@@ -36,9 +35,7 @@ async def create_feedback_batch(
     # Prepare batch insert data
     insert_values = []
     for feedback in feedback_batch:
-        span_path = (
-            json.dumps(feedback.span_path) if feedback.span_path is not None else None
-        )
+        span_path = json.dumps(feedback.span_path) if feedback.span_path is not None else None
         insert_values.append(
             (
                 feedback.trace_id,
