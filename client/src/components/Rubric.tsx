@@ -5,14 +5,22 @@ type RubricProps = {
   title: string;
   description: string;
   submittedScore: number | null;
+  highlight: { source: "inputs" | "outputs"; value: string } | null;
+  onHighlightSelect: (source: "inputs" | "outputs") => void;
+  onHighlightClear: () => void;
   onSubmit: (feedback: { score: number | null; comment: string }) => void;
+  onClear: () => void;
 };
 
 export function Rubric({
   title,
   description,
   submittedScore,
+  highlight,
+  onHighlightSelect,
+  onHighlightClear,
   onSubmit,
+  onClear,
 }: RubricProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [score, setScore] = useState("");
@@ -26,6 +34,13 @@ export function Rubric({
       comment,
     });
     setIsExpanded(false);
+  };
+
+  const handleClear = () => {
+    setScore("");
+    setComment("");
+    onHighlightClear();
+    onClear();
   };
 
   const formattedScore =
@@ -60,6 +75,48 @@ export function Rubric({
         {isExpanded ? (
           <div className="border-t border-gray-200 px-3 pb-3 pt-3">
             <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
+              <div className="flex flex-col gap-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm">
+                <span className="font-medium text-gray-700">
+                  Highlight a JSON string (optional)
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-white"
+                    onClick={() => onHighlightSelect("inputs")}
+                  >
+                    Use selection from Input
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-white"
+                    onClick={() => onHighlightSelect("outputs")}
+                  >
+                    Use selection from Output
+                  </button>
+                  {highlight ? (
+                    <button
+                      type="button"
+                      className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-white"
+                      onClick={onHighlightClear}
+                    >
+                      Clear highlight
+                    </button>
+                  ) : null}
+                </div>
+                {highlight ? (
+                  <div className="rounded-md border border-yellow-200 bg-yellow-50 px-2 py-1 text-xs text-yellow-800">
+                    <span className="font-semibold">Highlighted</span> (
+                    {highlight.source}):
+                    <span className="ml-1 break-all">{highlight.value}</span>
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-500">
+                    Select a JSON string value in the viewer, then choose Input
+                    or Output.
+                  </span>
+                )}
+              </div>
               <label className="flex flex-col gap-1 text-sm text-gray-700">
                 <span className="font-medium">Score (0.0 - 1.0)</span>
                 <input
@@ -83,12 +140,21 @@ export function Rubric({
                   className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none"
                 />
               </label>
-              <button
-                type="submit"
-                className=" rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                Submit Feedback
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="submit"
+                  className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Submit Feedback
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  onClick={handleClear}
+                >
+                  Clear Feedback
+                </button>
+              </div>
             </form>
           </div>
         ) : null}

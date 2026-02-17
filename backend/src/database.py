@@ -1,6 +1,7 @@
 from collections.abc import AsyncGenerator
 
 import asyncpg
+from fastapi import Depends
 
 from src.config import settings
 
@@ -14,8 +15,9 @@ async def get_pool() -> asyncpg.Pool:
     return pool
 
 
-async def get_connection() -> AsyncGenerator[asyncpg.Connection, None]:
-    pool = await get_pool()
+async def get_connection(
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> AsyncGenerator[asyncpg.Connection, None]:
     async with pool.acquire() as connection:
         yield connection
 

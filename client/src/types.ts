@@ -62,5 +62,12 @@ export type FeedbackCreate = {
   key: string;
   score?: number;
   comment?: string;
-  span?: FeedbackSpan;
+  span_path?: (string | number)[];
+  span_start_index?: number;
+  span_end_index?: number;
+};
+
+export type FeedbackClearRequest = {
+  trace_id: string;
+  key: string;
 };
