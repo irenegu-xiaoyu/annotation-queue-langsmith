@@ -148,7 +148,17 @@ async def list_trace_feedback(conn: asyncpg.Connection, trace_id: UUID) -> list[
 
     query, params = prepare_query(
         """
-        SELECT id, trace_id, key, score, comment, created_at, modified_at
+        SELECT
+            id,
+            trace_id,
+            key,
+            score,
+            comment,
+            span_path,
+            span_start_index,
+            span_end_index,
+            created_at,
+            modified_at
         FROM feedback
         WHERE trace_id = $trace_id
         ORDER BY created_at DESC

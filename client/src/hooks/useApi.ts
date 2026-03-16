@@ -1,7 +1,8 @@
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
-import { API_BASE, fetcher, postData } from "../lib/api";
+import { API_BASE, deleteData, fetcher, postData } from "../lib/api";
 import type {
+  Feedback,
   FeedbackCreate,
   Queue,
   QueueEntry,
@@ -13,7 +14,7 @@ import type {
 export function useProjects() {
   const { data, error, isLoading } = useSWR<TracingProject[]>(
     `${API_BASE}/projects`,
-    fetcher
+    fetcher,
   );
   return {
     projects: data || [],
@@ -25,7 +26,7 @@ export function useProjects() {
 export function useProject(projectId: string | null) {
   const { data, error, isLoading } = useSWR<TracingProject>(
     projectId ? `${API_BASE}/projects/${projectId}` : null,
-    fetcher
+    fetcher,
   );
   return {
     project: data,
@@ -39,16 +40,17 @@ export function useProjectTraces(projectId: string | null) {
   // README says POST /traces/query.
   // We'll implement a custom fetcher for this or just use SWR with a key that implies the query.
   // For simplicity, let's assume we want to query all traces for a project.
-  
-  const key = projectId ? `${API_BASE}/traces/query?project=${projectId}` : null;
-  
-  const { data, error, isLoading } = useSWR<Trace[]>(
-    key,
-    async () => {
-      if (!projectId) return [];
-      return postData<Trace[]>(`${API_BASE}/traces/query`, { project_id: projectId });
-    }
-  );
+
+  const key = projectId
+    ? `${API_BASE}/traces/query?project=${projectId}`
+    : null;
+
+  const { data, error, isLoading } = useSWR<Trace[]>(key, async () => {
+    if (!projectId) return [];
+    return postData<Trace[]>(`${API_BASE}/traces/query`, {
+      project_id: projectId,
+    });
+  });
 
   return {
     traces: data || [],
@@ -60,7 +62,7 @@ export function useProjectTraces(projectId: string | null) {
 export function useQueues() {
   const { data, error, isLoading } = useSWR<Queue[]>(
     `${API_BASE}/queues`,
-    fetcher
+    fetcher,
   );
   return {
     queues: data || [],
@@ -72,7 +74,7 @@ export function useQueues() {
 export function useQueue(queueId: string | null) {
   const { data, error, isLoading } = useSWR<Queue>(
     queueId ? `${API_BASE}/queues/${queueId}` : null,
-    fetcher
+    fetcher,
   );
   return {
     queue: data,
@@ -84,7 +86,7 @@ export function useQueue(queueId: string | null) {
 export function useQueueRubric(queueId: string | null) {
   const { data, error, isLoading } = useSWR<QueueRubricItem[]>(
     queueId ? `${API_BASE}/queues/${queueId}/rubric` : null,
-    fetcher
+    fetcher,
   );
   return {
     rubric: data || [],
@@ -96,18 +98,18 @@ export function useQueueRubric(queueId: string | null) {
 export function useQueueNextEntry(queueId: string | null) {
   const { data, error, isLoading, mutate } = useSWR<QueueEntry | null>(
     queueId ? `${API_BASE}/queues/${queueId}/entries/next` : null,
-    async (url) => {
-        try {
-            return await fetcher(url);
-        } catch (e: any) {
-            if (e.status === 404 || e.status === 204) return null;
-            throw e;
-        }
+    async (url: string) => {
+      try {
+        return await fetcher(url);
+      } catch (e: any) {
+        if (e.status === 404 || e.status === 204) return null;
+        throw e;
+      }
     },
     {
       revalidateOnFocus: false, // Don't re-fetch when focusing window to avoid skipping items if not intended
       shouldRetryOnError: false,
-    }
+    },
   );
   return {
     entry: data,
@@ -118,24 +120,60 @@ export function useQueueNextEntry(queueId: string | null) {
 }
 
 export function useSubmitFeedback() {
-    return useSWRMutation(
-        `${API_BASE}/feedback/batch`,
-        async (url, { arg }: { arg: FeedbackCreate[] }) => {
-            return postData(url, arg);
-        }
-    );
+  return useSWRMutation(
+    `${API_BASE}/feedback/batch`,
+    async (url, { arg }: { arg: FeedbackCreate[] }) => {
+      return postData(url, arg);
+    },
+  );
+}
+
+export function useTraceFeedback(traceId: string | null) {
+  const { data, error, isLoading, mutate } = useSWR<Feedback[]>(
+    traceId ? `${API_BASE}/traces/${traceId}/feedback` : null,
+    fetcher,
+  );
+  return {
+    feedback: data || [],
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+export function useDeleteFeedback() {
+  return useSWRMutation(
+    `${API_BASE}/feedback`,
+    async (_, { arg }: { arg: { feedbackId: string } }) => {
+      return deleteData(`${API_BASE}/feedback/${arg.feedbackId}`);
+    },
+  );
 }
 
 export function useCompleteQueueEntry() {
-    return useSWRMutation(
-        // Key is dynamic based on call, so we use a generic key or null
-        // But useSWRMutation needs a key.
-        // We'll use a stable key and pass the dynamic part in arg or construct url in fetcher.
-        // Let's just use a generic key.
-        "complete-entry", 
-        async (_, { arg }: { arg: { queueId: string; entryId: string } }) => {
-            return postData(`${API_BASE}/queues/${arg.queueId}/entries/${arg.entryId}/complete`, {});
-        }
-    );
+  return useSWRMutation(
+    // Key is dynamic based on call, so we use a generic key or null
+    // But useSWRMutation needs a key.
+    // We'll use a stable key and pass the dynamic part in arg or construct url in fetcher.
+    // Let's just use a generic key.
+    "complete-entry",
+    async (_, { arg }: { arg: { queueId: string; entryId: string } }) => {
+      return postData(
+        `${API_BASE}/queues/${arg.queueId}/entries/${arg.entryId}/complete`,
+        {},
+      );
+    },
+  );
 }
 
+export function useRequeueEntry() {
+  return useSWRMutation(
+    "requeue-entry",
+    async (_, { arg }: { arg: { queueId: string; entryId: string } }) => {
+      return postData(
+        `${API_BASE}/queues/${arg.queueId}/entries/${arg.entryId}/requeue`,
+        {},
+      );
+    },
+  );
+}

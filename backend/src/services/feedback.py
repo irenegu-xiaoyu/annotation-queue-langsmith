@@ -1,5 +1,6 @@
 """Business logic for feedback."""
 
+import json
 from uuid import UUID
 
 import asyncpg
@@ -34,30 +35,76 @@ async def create_feedback_batch(
     # Prepare batch insert data
     insert_values = []
     for feedback in feedback_batch:
+        span_path = json.dumps(feedback.span_path) if feedback.span_path is not None else None
         insert_values.append(
             (
                 feedback.trace_id,
                 feedback.key,
                 feedback.score,
                 feedback.comment,
+                span_path,
+                feedback.span_start_index,
+                feedback.span_end_index,
             )
         )
 
     # Insert all feedback items in batch
     rows = await conn.fetch(
         """
-        INSERT INTO feedback (trace_id, key, score, comment)
-        SELECT * FROM UNNEST($1::uuid[], $2::text[], $3::float[], $4::text[])
-        RETURNING id, trace_id, key, score, comment, created_at, modified_at
+        INSERT INTO feedback (
+            trace_id,
+            key,
+            score,
+            comment,
+            span_path,
+            span_start_index,
+            span_end_index
+        )
+        SELECT * FROM UNNEST(
+            $1::uuid[],
+            $2::text[],
+            $3::float[],
+            $4::text[],
+            $5::jsonb[],
+            $6::int[],
+            $7::int[]
+        )
+        ON CONFLICT (trace_id, key)
+        DO UPDATE SET
+            score = EXCLUDED.score,
+            comment = EXCLUDED.comment,
+            span_path = EXCLUDED.span_path,
+            span_start_index = EXCLUDED.span_start_index,
+            span_end_index = EXCLUDED.span_end_index,
+            modified_at = NOW()
+        RETURNING
+            id,
+            trace_id,
+            key,
+            score,
+            comment,
+            span_path,
+            span_start_index,
+            span_end_index,
+            created_at,
+            modified_at
         """,
         [v[0] for v in insert_values],  # trace_ids
         [v[1] for v in insert_values],  # keys
         [v[2] for v in insert_values],  # scores
         [v[3] for v in insert_values],  # comments
+        [v[4] for v in insert_values],  # span_path
+        [v[5] for v in insert_values],  # span_start_index
+        [v[6] for v in insert_values],  # span_end_index
     )
 
     # Process results
-    results = [dict(row) for row in rows]
+    results = []
+    for row in rows:
+        result = dict(row)
+        if isinstance(result.get("span_path"), str):
+            result["span_path"] = json.loads(result["span_path"])
+        results.append(result)
     return results
 
 
@@ -76,6 +123,15 @@ async def update_feedback(
     if feedback_update.comment is not None:
         updates["comment"] = feedback_update.comment
 
+    if feedback_update.span_path is not None:
+        updates["span_path"] = feedback_update.span_path
+
+    if feedback_update.span_start_index is not None:
+        updates["span_start_index"] = feedback_update.span_start_index
+
+    if feedback_update.span_end_index is not None:
+        updates["span_end_index"] = feedback_update.span_end_index
+
     if not updates:
         return None  # Signal no fields to update
 
@@ -89,7 +145,17 @@ async def update_feedback(
         UPDATE feedback
         SET {", ".join(set_clauses)}
         WHERE id = $feedback_id
-        RETURNING id, trace_id, key, score, comment, created_at, modified_at
+        RETURNING
+            id,
+            trace_id,
+            key,
+            score,
+            comment,
+            span_path,
+            span_start_index,
+            span_end_index,
+            created_at,
+            modified_at
     """
 
     # Remove modified_at from params since we handle it with NOW()
@@ -102,6 +168,38 @@ async def update_feedback(
         return False  # Signal not found
 
     result = dict(row)
+    if isinstance(result.get("span_path"), str):
+        result["span_path"] = json.loads(result["span_path"])
+    return result
+
+
+async def get_feedback(conn: asyncpg.Connection, feedback_id: UUID) -> dict | None:
+    """Fetch a feedback item by ID."""
+    query, params = prepare_query(
+        """
+        SELECT
+            id,
+            trace_id,
+            key,
+            score,
+            comment,
+            span_path,
+            span_start_index,
+            span_end_index,
+            created_at,
+            modified_at
+        FROM feedback
+        WHERE id = $feedback_id
+        """,
+        feedback_id=feedback_id,
+    )
+    row = await conn.fetchrow(query, *params)
+    if not row:
+        return None
+
+    result = dict(row)
+    if isinstance(result.get("span_path"), str):
+        result["span_path"] = json.loads(result["span_path"])
     return result
 
 

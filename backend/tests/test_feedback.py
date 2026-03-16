@@ -78,6 +78,56 @@ async def test_create_feedback_batch_minimal(client: AsyncClient, sample_trace):
     assert data[0]["comment"] is None
 
 
+async def test_create_feedback_batch_upsert(client: AsyncClient, sample_trace, db_conn):
+    """Test upserting feedback for the same trace and key."""
+    initial_response = await client.post(
+        "/feedback/batch",
+        json=[
+            {
+                "trace_id": str(sample_trace["id"]),
+                "key": "accuracy",
+                "score": 0.7,
+                "comment": "Initial",
+            }
+        ],
+    )
+
+    assert initial_response.status_code == 201
+    initial_data = initial_response.json()
+    assert len(initial_data) == 1
+    initial_id = initial_data[0]["id"]
+
+    upsert_response = await client.post(
+        "/feedback/batch",
+        json=[
+            {
+                "trace_id": str(sample_trace["id"]),
+                "key": "accuracy",
+                "score": 0.95,
+                "comment": "Updated",
+            }
+        ],
+    )
+
+    assert upsert_response.status_code == 201
+    upsert_data = upsert_response.json()
+    assert len(upsert_data) == 1
+    assert upsert_data[0]["id"] == initial_id
+    assert upsert_data[0]["score"] == 0.95
+    assert upsert_data[0]["comment"] == "Updated"
+
+    count = await db_conn.fetchval(
+        """
+        SELECT COUNT(*)
+        FROM feedback
+        WHERE trace_id = $1 AND key = $2
+        """,
+        sample_trace["id"],
+        "accuracy",
+    )
+    assert count == 1
+
+
 async def test_get_feedback(client: AsyncClient, sample_feedback):
     """Test getting a specific feedback item."""
     response = await client.get(f"/feedback/{sample_feedback['id']}")

@@ -4,6 +4,7 @@ import asyncio
 import os
 import subprocess
 from collections.abc import AsyncGenerator
+from uuid import uuid4
 
 import asyncpg
 import pytest_asyncio
@@ -71,9 +72,14 @@ def pytest_unconfigure(config):
     """Drop test database after all tests."""
     global _pool
     if _pool:
-        loop = asyncio.get_event_loop()
-        if not loop.is_closed():
-            loop.run_until_complete(_pool.close())
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                asyncio.run(_pool.close())
+            else:
+                loop.run_until_complete(_pool.close())
+        except RuntimeError:
+            asyncio.run(_pool.close())
 
     subprocess.run(
         [
@@ -108,10 +114,27 @@ async def db_conn() -> AsyncGenerator[asyncpg.Connection, None]:
     """Get a database connection for a test with transaction rollback."""
     pool = await get_test_pool()
     async with pool.acquire() as conn:
-        # Start a transaction
-        async with conn.transaction():
-            yield conn
-            # Transaction is automatically rolled back
+        yield conn
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def cleanup_db() -> AsyncGenerator[None, None]:
+    """Clean database tables after each test to keep tests isolated."""
+    yield
+    pool = await get_test_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            TRUNCATE TABLE
+                feedback,
+                queue_entries,
+                queue_rubric_items,
+                queues,
+                traces,
+                tracing_projects
+            RESTART IDENTITY CASCADE
+            """
+        )
 
 
 @pytest_asyncio.fixture
@@ -184,7 +207,7 @@ async def sample_queue(db_conn):
         VALUES ($1)
         RETURNING id, name, created_at, modified_at
         """,
-        "Test Queue",
+        f"Test Queue {uuid4()}",
     )
     return dict(row)
 

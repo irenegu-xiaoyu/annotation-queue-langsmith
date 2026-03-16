@@ -23,6 +23,7 @@ export const fetcher = async (url: string) => {
 };
 
 export async function postData<T>(url: string, data: unknown): Promise<T> {
+  console.log(url);
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -49,7 +50,17 @@ export async function postData<T>(url: string, data: unknown): Promise<T> {
     throw error;
   }
 
-  return res.json();
+  // allow response with no body
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
+  const text = await res.text();
+  if (!text) {
+    return undefined as T;
+  }
+
+  return JSON.parse(text) as T;
 }
 
 export async function deleteData(url: string) {
